@@ -265,29 +265,36 @@
   let viewDate = new Date();
 
   // ── Time ──────────────────────────────────────────────────────────────────
-  // Try multiple free time APIs
+  // Fetch the TRUE local datetime using the device's own timezone.
+  // We ask the API for the time in the local IANA timezone so we get
+  // the correct local time regardless of UTC offset.
   async function fetchOnlineTime() {
+    // Get local IANA timezone string e.g. "Asia/Manila"
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const apis = [
-      'https://timeapi.io/api/time/current/zone?timeZone=UTC',
-      'https://worldtimeapi.org/api/timezone/UTC'
+      `https://timeapi.io/api/time/current/zone?timeZone=${encodeURIComponent(tz)}`,
+      `https://worldtimeapi.org/api/timezone/${encodeURIComponent(tz)}`
     ];
     for (const url of apis) {
       try {
         const r = await fetch(url, { cache: 'no-cache' });
         if (!r.ok) continue;
         const d = await r.json();
-        // Parse datetime from either API
-        let iso = d.dateTime || d.utc_datetime || d.datetime;
+        // timeapi.io returns dateTime as local time in the requested zone
+        // worldtimeapi returns datetime as local time in the requested zone
+        let iso = d.dateTime || d.datetime;
         if (!iso) continue;
-        // Convert to local by adjusting for local timezone offset
-        // Both APIs return UTC; use local timezone offset
-        const utcMs = new Date(iso).getTime();
-        const now = Date.now();
-        systemOffsetMs = utcMs - now;
-        document.getElementById('timeSrc').textContent = '(online)';
+        // The API gives us the TRUE local time in our timezone.
+        // Compute how far off our system clock is from that.
+        const apiLocalMs = new Date(iso).getTime();
+        const sysMs = Date.now();
+        systemOffsetMs = apiLocalMs - sysMs;
+        document.getElementById('timeSrc').textContent = '(online ✓)';
         return true;
       } catch (e) {}
     }
+    // Fallback: system clock is fine for local time already
+    systemOffsetMs = 0;
     document.getElementById('timeSrc').textContent = '(local)';
     return false;
   }
